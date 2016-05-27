@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Copy all the *.txt files from the textfiles dir under the user home dir
+# into a textfiles dir in the Hadoop Distributed File System
+hadoop fs -mkdir /textfiles
+hadoop fs -put ~/textfiles/*.txt /textfiles
+hadoop fs -ls /textfiles
+# eof
