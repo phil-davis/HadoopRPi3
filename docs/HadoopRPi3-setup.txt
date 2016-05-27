@@ -1,0 +1,376 @@
+Raspberry Pi Hadoop Cluster Configuration Notes
+
+These notes are based on blogs by Jonas Widriksson and my own thoughts and experiences.
+This is running on the RPi3 Model B.
+
+This first version of the notes sets up just the first node and gets to the point where it can run wordcount jobs.
+
+The initial blog was for Hadoop V1.2.1 - that blog contains a good overview of the components of Hadoop in V1.2.1:
+http://www.widriksson.com/raspberry-Pi-Hadoop-cluster/
+
+The later blog for Hadoop 2.7.2 contains good information about the differences in Hadoop V2,
+and setup detail that works for V2.7.2:
+http://www.widriksson.com/raspberry-pi-2-hadoop-2-cluster/
+
+Some simple scripts are available in a GitHub repo. The scripts have groups of commands from the steps below for convenience.
+Look in:
+https://github.com/phil-davis/HadoopRPi3/tree/master/scripts
+
+Installation Steps
+==================
+01) Install RPi3s with default Raspbian OS
+
+To see what version you have:
+pi@RPi3101:~ $ cat /etc/os-release
+	PRETTY_NAME="Raspbian GNU/Linux 8 (jessie)"
+	NAME="Raspbian GNU/Linux"
+	VERSION_ID="8"
+	VERSION="8 (jessie)"
+	ID=raspbian
+	ID_LIKE=debian
+	HOME_URL="http://www.raspbian.org/"
+	SUPPORT_URL="http://www.raspbian.org/RaspbianForums"
+	BUG_REPORT_URL="http://www.raspbian.org/RaspbianBugs"
+
+To see the Linux version:
+pi@RPi3101:~ $ cat /proc/version
+	Linux version 4.1.19-v7+ (dc4@dc4-XPS13-9333) (gcc version 4.9.3 (crosstool-NG crosstool-ng-1.22.0-88-g8460611) ) #858 SMP Tue Mar 15 15:56:00 GMT 2016
+
+Get updates whenever you like:
+	sudo apt-get update
+
+Install the execstack utility, so we can attempt to fix some warnings in the libraries that come with hadoop:
+	sudo apt-get install execstack
+
+02) Attach to a network that gives DHCP. I am using RJ45 network cables up to a switch and pfSense router.
+Allocate some static IP addresses from the upstream router. (Otherwise you need to explicitly set the IP address/CIDR)
+
+I happened to use:
+	10.49.209.101
+	10.49.209.102
+	10.49.209.103
+	...
+
+03) Menu, Preference, Raspberry Pi Configuration. Set hostname for each one. (/etc/hostname)
+
+I used:
+	RPi3101
+	RPi3102
+	RPi3103
+
+04) Edit /etc/hosts and put the IP addresses and names in, to make life easy and not depend on having a DNS server:
+	10.49.209.101 RPi3101
+	10.49.209.102 RPi3102
+	10.49.209.103 RPi3103
+
+05) In Interfaces, make sure SSH is enabled.
+
+06) Under localisation set appropriate local values:
+	Locale: en/US/UF-8
+	Timezone: Australia/Darwin
+	Keyboard: English (US)
+	WiFi Country: Australia
+
+07) Use an SSH client (e.g. puTTY from Windows) to SSH to the RPi3, make sure you can login as pi/raspberry
+
+08) Change the password for the "pi" username (use the passwd command)
+
+09) Check that Java is installed:
+	pi@RPi3101:~ $ java -version
+	java version "1.8.0_65"
+	Java(TM) SE Runtime Environment (build 1.8.0_65-b17)
+	Java HotSpot(TM) Client VM (build 25.65-b01, mixed mode)
+
+10) Create the hadoop group and hduser user (createhduser.sh):
+	sudo addgroup hadoop
+	sudo adduser --ingroup hadoop hduser
+		(enter password for user and default info as asked)
+	sudo adduser hduser sudo
+		User hduser is now in the hadoop and sudo groups.
+
+11) Create ssh rsa pair keys (createsshkeys.sh):
+Login to a shell as hduser (e.g. "su hduser") and:
+	mkdir ~/.ssh
+	ssh-keygen -t rsa -P ""
+	cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
+
+Then test that it works (say yes the first time if you are prompted about the new keys):
+	ssh localhost
+to make sure you can login without giving a password.
+	exit ! back to ordinary "hduser" login
+	exit ! back to "pi" root login
+
+12) Download and install the latest stable hadoop (gethadoop.sh):
+	wget http://apache.mirrors.spacedump.net/hadoop/core/stable/hadoop-2.7.2.tar.gz
+	sudo mkdir /opt (note - the dir is already there, so this can be skipped)
+	sudo tar -xvzf hadoop-2.7.2.tar.gz -C /opt/
+	sudo mv /opt/hadoop-2.7.2 /opt/hadoop
+	sudo chown -R hduser:hadoop /opt/hadoop
+
+13) Hadoop spits out messages like:
+Java HotSpot(TM) Client VM warning: You have loaded library /opt/hadoop/lib/native/libhadoop.so.1.0.0 which might have disabled stack guard. The VM will try to fix the stack guard now.
+It's highly recommended that you fix the library with 'execstack -c <libfile>', or link it with '-z noexecstack'.
+
+Try to fix this by running this command from the "pi" account:
+	sudo execstack -c /opt/hadoop/lib/native/libhadoop.so.1.0.0
+
+There is no error from the command, but still the Client VM warning comes out.
+This needs to be sorted some day but does not stop Hadoop from working.
+
+14) Configure environment variables for Hadoop stuff by adding to the end of /etc/bash.bashrc
+(e.g. edit with "sudo nano /etc/bash.bashrc")
+	export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:jre/bin/java::")
+	export HADOOP_INSTALL=/opt/hadoop
+	export PATH=$PATH:$HADOOP_INSTALL/bin
+	export PATH=$PATH:$HADOOP_INSTALL/sbin
+	export HADOOP_MAPRED_HOME=$HADOOP_INSTALL
+	export HADOOP_COMMON_HOME=$HADOOP_INSTALL
+	export HADOOP_HDFS_HOME=$HADOOP_INSTALL
+	export YARN_HOME=$HADOOP_INSTALL
+	export HADOOP_HOME=$HADOOP_INSTALL
+
+15) Check that it works by running hadoop from hduser:
+	su hduser
+	hduser@RPi3101:/home/pi $ hadoop version
+	Hadoop 2.7.2
+	Subversion https://git-wip-us.apache.org/repos/asf/hadoop.git -r b165c4fe8a74265c792ce23f546c64604acf0e41
+	Compiled by jenkins on 2016-01-26T00:08Z
+	Compiled with protoc 2.5.0
+	From source with checksum d0fda26633fa762bff87ec759ebe689c
+	This command was run using /opt/hadoop/share/hadoop/common/hadoop-common-2.7.2.jar
+
+	exit ! fron hduser
+
+16) Setup some other Hadoop-specific environment variables in
+	/opt/hadoop/etc/hadoop/hadoop-env.sh
+
+See the version on GitHub. Currently the only change to the supplied file is the JAVA_HOME line:
+	export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+
+17) In /opt/hadoop/etc/hadoop put the following (see the files in GitHub for up-to-date templates):
+core-site.xml
+
+	<configuration>
+		<property>
+			<name>hadoop.tmp.dir</name>
+			<value>/hdfs/tmp</value>
+		</property>
+		<property>
+			<name>fs.defaultFS</name>
+			<value>hdfs://RPi3101:54310</value>
+		</property>
+	</configuration>
+
+hdfs-site.xml
+
+	<configuration>
+		<property>
+			<name>dfs.replication</name>
+			<value>1</value>
+		</property>
+		<property>
+			<name>dfs.blocksize</name>
+			<value>5242880</value>
+		</property>
+	</configuration>
+
+mapred-site.xml
+
+	<configuration>
+		<property>
+			<name>mapreduce.framework.name</name>
+			<value>yarn</value>
+		</property>
+		<property>
+			<name>mapreduce.map.memory.mb</name>
+			<value>256</value>
+		</property>
+		<property>
+			<name>mapreduce.map.java.opts</name>
+			<value>-Xmx204m</value>
+		</property>
+		<property>
+			<name>mapreduce.map.cpu.vcores</name>
+			<value>2</value>
+		</property>
+		<property>
+			<name>mapreduce.reduce.memory.mb</name>
+			<value>128</value>
+		</property>
+		<property>
+			<name>mapreduce.reduce.java.opts</name>
+			<value>-Xmx102m</value>
+		</property>
+		<property>
+			<name>mapreduce.reduce.cpu.vcores</name>
+			<value>2</value>
+		</property>
+		<property>
+			<name>yarn.app.mapreduce.am.resource.mb</name>
+			<value>128</value>
+		</property>
+		<property>
+			<name>yarn.app.mapreduce.am.command-opts</name>
+			<value>-Xmx102m</value>
+		</property>
+		<property>
+			<name>yarn.app.mapreduce.am.resource.cpu-vcores</name>
+			<value>1</value>
+		</property>
+		<property>
+			<name>mapreduce.job.maps</name>
+			<value>4</value>
+		</property>
+		<property>
+			<name>mapreduce.job.reduces</name>
+			<value>1</value>
+		</property>
+	</configuration>
+*** Note there are 4 maps and 1 reduces - that helps us get just one output file.
+
+yarn-site.xml
+
+	<configuration>
+		<property>
+			<name>yarn.resourcemanager.resource-tracker.address</name>
+			<value>RPi3101:8025</value>
+		</property>
+		<property>
+			<name>yarn.resourcemanager.scheduler.address</name>
+			<value>RPi3101:8035</value>
+		</property>
+		<property>
+			<name>yarn.resourcemanager.address</name>
+			<value>RPi3101:8050</value>
+		</property>
+		<property>
+			<name>yarn.nodemanager.aux-services</name>
+			<value>mapreduce_shuffle</value>
+		</property>
+		<property>
+			<name>yarn.nodemanager.resource.cpu-vcores</name>
+			<value>4</value>
+		</property>
+		<property>
+			<name>yarn.nodemanager.resource.memory-mb</name>
+			<value>768</value>
+		</property>
+		<property>
+			<name>yarn.scheduler.minimum-allocation-mb</name>
+			<value>64</value>
+		</property>
+		<property>
+			<name>yarn.scheduler.maximum-allocation-mb</name>
+			<value>256</value>
+		</property>
+		<property>
+			<name>yarn.scheduler.minimum-allocation-vcores</name>
+			<value>1</value>
+		</property>
+		<property>
+			<name>yarn.scheduler.maximum-allocation-vcores</name>
+			<value>4</value>
+		</property>
+		<property>
+			<name>yarn.nodemanager.vmem-check-enabled</name>
+			<value>true</value>
+		</property>
+		<property>
+			<name>yarn.nodemanager.pmem-check-enabled</name>
+			<value>true</value>
+		</property>
+		<property>
+			<name>yarn.nodemanager.vmem-pmem-ratio</name>
+			<value>2.1</value>
+		</property>
+	</configuration>
+
+18) Create the HDFS file system (createhdfs.sh):
+	sudo mkdir -p /hdfs/tmp
+	sudo chown hduser:hadoop /hdfs/tmp
+	sudo chmod 750 /hdfs/tmp
+
+And format HDFS from hduser:
+	hdfs namenode -format
+
+19) Start services from hduser:
+	start-dfs.sh
+	start-yarn.sh
+
+To stop (as and when needed):
+	stop-dfs.sh
+	stop-yarn.sh
+
+20) See what stuff is running:
+hduser$ jps
+30192 DataNode
+30531 Jps
+28983 ResourceManager
+30394 SecondaryNameNode
+29452 NodeManager
+30077 NameNode
+
+You should see those 6 things above, in some order and with different PID numbers.
+
+21) Get some sample text files to use as data input for wordcount (gettextfiles.sh):
+	# Make a textfiles sub-directory if it does not exist
+	mkdir -p textfiles
+	cd ./textfiles
+
+	# Get and unpack smallfile.txt (about 1.2MB) and mediumfile.txt (about 35MB) (thanks to widriksson site)
+	# These are handy for demonstrating wordcount
+	# Note: See http://www.widriksson.com/raspberry-pi-2-hadoop-2-cluster/ for a good tutorial of setting up an RPi Hadoop cluster
+	wget http://www.widriksson.com/wp-content/uploads/2014/10/hadoop_sample_txtfiles.tar.gz
+	tar -xf hadoop_sample_txtfiles.tar.gz
+
+	# Get and unpack the text of some other famous books available from the Gutenberg project
+	# Ulysses by James Joyce
+	wget http://www.gutenberg.org/files/4300/4300.zip
+	unzip 4300.zip
+
+	# Adventures of Huckleberry Finn by Mark Twain
+	wget http://www.gutenberg.org/files/76/76.zip
+	unzip 76.zip
+
+	# War and Peace by Leo Tolstoy
+	wget http://www.gutenberg.org/files/2600/2600.zip
+	unzip 2600.zip
+
+	# eof
+
+The textfiles dir ends up with:
+	-rw-r--r-- 1 hduser hadoop  3226651 May  6 16:04 2600.txt
+	-rw-r--r-- 1 hduser hadoop  1199841 May 27 03:36 2600.zip
+	-rw-r--r-- 1 hduser hadoop  1573079 Dec  9  2014 4300.txt
+	-rw-r--r-- 1 hduser hadoop   661646 May 27 03:36 4300.zip
+	-rw-r--r-- 1 hduser hadoop   606661 Apr 18  2015 76.txt
+	-rw-r--r-- 1 hduser hadoop   226068 May 27 03:36 76.zip
+	-rw-r--r-- 1 hduser hadoop 14157806 Oct  9  2014 hadoop_sample_txtfiles.tar.gz
+	-rw-r--r-- 1 hduser hadoop 35926176 Oct  6  2014 mediumfile.txt
+	-rw-r--r-- 1 hduser hadoop  1226438 Oct  6  2014 smallfile.txt
+
+22) Run a small wordcount job to make sure things are good:
+	# Copy all the *.txt files from the textfiles dir under the user home dir
+	# into a textfiles dir in the Hadoop Distributed File System
+	hadoop fs -mkdir /textfiles
+	hadoop fs -put ~/textfiles/*.txt /textfiles
+	hadoop fs -ls /textfiles
+
+	# Run a wordcount on smallfile.txt
+	# Timing information will appear at the end of the output, it takes about 1 minute 10 seconds on my RPi3
+	time hadoop jar /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar wordcount /textfiles/smallfile.txt /smallfile-out
+
+	# Get the smallfile-out output folder from HDFS into a local dir
+	hadoop fs -get /smallfile-out ./smallfile-out
+
+	# Have a look at the counts of words
+	more ./smallfile-out/part-r-00000
+
+There are other example programs like:
+	wordcount
+	wordmean
+	wordmedian
+	wordstandarddeviation
+
+You can see what is provided in the example code with the command:
+	hadoop jar /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar
