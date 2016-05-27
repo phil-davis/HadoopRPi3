@@ -285,6 +285,11 @@ yarn-site.xml
 		</property>
 	</configuration>
 
+slaves
+	localhost
+
+Note: There is nothing to do for "slaves", it should already have "localhost" which is correct for our initial single-node setup
+
 18) Create the HDFS file system (createhdfs.sh):
 	sudo mkdir -p /hdfs/tmp
 	sudo chown hduser:hadoop /hdfs/tmp
