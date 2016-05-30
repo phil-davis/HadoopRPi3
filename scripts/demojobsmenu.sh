@@ -68,7 +68,47 @@ picalc_menu()
 wordcount_menu()
 {
   clear
-  echo "Invoke a wordcount job"
+  textoption=
+
+  until [ "$textoption" = "Q" ]; do
+    echo "Wordcount"
+    echo ""
+    echo "This example counts the number of occurrences of the different words in a document"
+    echo ""
+    echo "The following texts are available:"
+    echo ""
+    echo "S - small text file (1.2MB)"
+    echo "M - medium text file (35MB)"
+    echo "U - Ulysses by James Joyce (1.5MB)"
+    echo "H - Huckleberry Finn by Mark Twain (0.6MB)"
+    echo "W - War and Peace by Leo Tolstoy (1.2MB)"
+    echo ""
+    echo "Q - Quit"
+    echo ""
+    echo -n "Enter selection: "
+    read textoption
+    echo ""
+    # Get just the 1st character
+    textoption=${textoption:0:1}
+    # Convert to uppercase
+    textoption=${textoption^}
+    tfn=
+    case $textoption in
+      S ) tfd="small text file";tfn="smallfile";;
+      M ) tfd="medium text file";tfn="mediumfile";;
+      U ) tfd="Ulysses";tfn="4300";;
+      H ) tfd="Huckleberry Finn";tfn="76";;
+      W ) tfd="War and Peace";tfn="2600";;
+      "" ) clear;;
+      Q ) clear;;
+      * ) echo "Enter a valid Wordcount text file option"; do_enter_clear;;
+    esac
+    if [ -n "$tfn" ]; then
+      echo "Doing Wordcount for $tfd"
+      time hadoop jar /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar wordcount /textfiles/${tfn}.txt /${tfn}-out
+      do_enter_clear
+    fi
+  done
 }
 
 job_menu()
@@ -86,7 +126,7 @@ job_menu()
     job=${job^}
     case $job in
       P ) picalc_menu; do_enter_clear;;
-      W ) wordcount_menu; do_enter_clear;;
+      W ) wordcount_menu; clear;;
       "" ) clear;;
       Q ) clear;;
       * ) echo "Enter a valid Job menu option"; do_enter_clear;;
