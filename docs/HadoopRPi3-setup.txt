@@ -449,3 +449,6 @@ hduser@RPi3103:~ $ jps
 g) Run tests of wordcount from the main node, as in step 22,
 copy the txt files into HDFS
 then run the wordcount
+
+See the status of the cluster, executing jobs and finished jobs with your browser at port 8088 of the main node e.g.:
+http://rpi3101:8088/cluster
