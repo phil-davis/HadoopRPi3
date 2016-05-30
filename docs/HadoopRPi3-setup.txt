@@ -129,7 +129,13 @@ This needs to be sorted some day but does not stop Hadoop from working.
 	export YARN_HOME=$HADOOP_INSTALL
 	export HADOOP_HOME=$HADOOP_INSTALL
 
-15) Check that it works by running hadoop from hduser:
+15) Setup some other Hadoop-specific environment variables in
+	/opt/hadoop/etc/hadoop/hadoop-env.sh
+
+See the version on GitHub. Currently the only change to the supplied file is the JAVA_HOME line:
+	export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+
+16) Check that it works by running hadoop from hduser:
 	su hduser
 	hduser@RPi3101:/home/pi $ hadoop version
 	Hadoop 2.7.2
@@ -140,12 +146,6 @@ This needs to be sorted some day but does not stop Hadoop from working.
 	This command was run using /opt/hadoop/share/hadoop/common/hadoop-common-2.7.2.jar
 
 	exit ! fron hduser
-
-16) Setup some other Hadoop-specific environment variables in
-	/opt/hadoop/etc/hadoop/hadoop-env.sh
-
-See the version on GitHub. Currently the only change to the supplied file is the JAVA_HOME line:
-	export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
 
 17) In /opt/hadoop/etc/hadoop put the following (see the files in GitHub for up-to-date templates):
 core-site.xml
