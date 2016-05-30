@@ -17,6 +17,8 @@ display_top_menu()
   echo ""
   echo "J - choose a Job to run"
   echo "V - display Hadoop, Java and OS Version information"
+  echo "S - Start the Hadoop cluster software"
+  echo "H - Halt (shutdown) the Hadoop cluster software"
   echo "Q - Quit"
 }
 
@@ -119,6 +121,8 @@ until [ "$selection" = "Q" ]; do
   case $selection in
     J ) job_menu;;
     V ) display_versions; do_enter_clear;;
+    S ) start-dfs.sh; start-yarn.sh; do_enter_clear;;
+    H ) stop-yarn.sh; stop-dfs.sh; do_enter_clear;;
     "" ) clear;;
     Q ) exit;;
     * ) echo "Enter a valid menu option"; do_enter_clear;;
