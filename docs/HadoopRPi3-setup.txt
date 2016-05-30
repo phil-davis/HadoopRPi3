@@ -42,6 +42,10 @@ Get updates whenever you like:
 Install the execstack utility, so we can attempt to fix some warnings in the libraries that come with hadoop:
 	sudo apt-get install execstack
 
+And any other utilities that you want:
+	sudo apt-get install telnet
+	sudo apt-get install dnsutils
+
 02) Attach to a network that gives DHCP. I am using RJ45 network cables up to a switch and pfSense router.
 Allocate some static IP addresses from the upstream router. (Otherwise you need to explicitly set the IP address/CIDR)
 
@@ -93,6 +97,10 @@ Login to a shell as hduser (e.g. "su hduser") and:
 	mkdir ~/.ssh
 	ssh-keygen -t rsa -P ""
 	cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
+
+When setting up a cluster, do not create new ones of these on each node.
+Use the ones from the main (1st) node.
+That way hduser on each of the nodes will autologin from the others.
 
 Then test that it works (say yes the first time if you are prompted about the new keys):
 	ssh localhost
@@ -173,6 +181,7 @@ hdfs-site.xml
 			<value>5242880</value>
 		</property>
 	</configuration>
+*** Note if you are setting up a cluster then set the dfs.replication value to the number of nodes in the cluster.
 
 mapred-site.xml
 
@@ -364,6 +373,8 @@ The textfiles dir ends up with:
 	# Run a wordcount on smallfile.txt
 	# Timing information will appear at the end of the output, it takes about 1 minute 10 seconds on my RPi3
 	time hadoop jar /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar wordcount /textfiles/smallfile.txt /smallfile-out
+	# Or try a medium-sized job
+	time hadoop jar /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar wordcount /textfiles/mediumfile.txt /mediumfile-out
 
 	# Get the smallfile-out output folder from HDFS into a local dir
 	hadoop fs -get /smallfile-out ./smallfile-out
@@ -379,3 +390,62 @@ There are other example programs like:
 
 You can see what is provided in the example code with the command:
 	hadoop jar /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar
+
+To expand the network to include other RPi3 systems:
+
+On the 1st (main) node:
+a) Clear out the HDFS filesystem (from hduser on every node):
+	rm -rf /hdfs/tmp/*
+	hdfs namenode -format
+
+b) Put all the systems into /opt/hadoop/etc/hadoop/slaves 
+	RPi3101
+	RPi3102
+	RPi3103
+
+c) core-site.xml - no change needed, i.e. fs.defaultFS points to the main node.
+
+d) hdfs-site.xml - change replication to 3 (or however many nodes you will have)
+<property>
+<name>dfs.replication</name>
+<value>3</value>
+</property>
+
+e) yarn-site.xml - no change needed, i.e. the address parameters all point to the main node.
+
+f) Now you can clone the whole MicroSD card, make sure to set /etc/hostname individually on each clone.
+If you setup each node individually from the single-node instructions,
+then make sure that the items (a) to (e) are done on each node, and
+copy the files from hduser .ssh folder on the 1st node to hduser .ssh folder on the other nodes
+(rather than doing step 11 above)
+
+g) As hduser on the main node, start DFS and YARN:
+(This will start the needed processes on the slaves also)
+
+start-dfs.sh
+start-yarn.sh
+
+h) From hduser on each node, check that processes are running:
+On the main node:
+hduser@RPi3101:~ $ jps
+3488 NameNode
+4145 NodeManager
+3810 SecondaryNameNode
+4022 ResourceManager
+4364 Jps
+3615 DataNode
+
+On the slaves:
+hduser@RPi3102:~ $ jps
+19606 NodeManager
+19486 DataNode
+19743 Jps
+
+hduser@RPi3103:~ $ jps
+19331 Jps
+19192 NodeManager
+19071 DataNode
+
+g) Run tests of wordcount from the main node, as in step 22,
+copy the txt files into HDFS
+then run the wordcount
